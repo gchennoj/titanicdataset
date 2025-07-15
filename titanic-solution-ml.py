@@ -432,9 +432,24 @@ sns.heatmap(m,annot=True,cmap="Reds")
 
 # In[133]:
 
+# ✅ Filter only numeric columns (excluding 'Survived')
+numeric_data = data.select_dtypes(include=['number']).drop(columns=['Survived'], errors='ignore')
 
-corelation=data.corr()["Survived"]
-corelation
+# Compute correlation on numeric columns only
+m = numeric_data.corr()
+# Plot heatmap
+plt.figure(figsize=(15, 10))
+sns.heatmap(m, annot=True, cmap="Reds")
+plt.title("Correlation Matrix (Numeric Columns Only)")
+plt.show()
+
+# ✅ If you want correlation with 'Survived', you must include it in the numeric data
+numeric_data_with_survived = data.select_dtypes(include=['number'])
+
+# Calculate correlation of all numeric columns with 'Survived'
+correlation = numeric_data_with_survived.corr()["Survived"]
+
+print(correlation)
 
 
 # In[134]:
