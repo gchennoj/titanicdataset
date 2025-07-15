@@ -1,645 +1,109 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # Titanic Machine Learning from Disaster
-# We will work on Exploring and Analyzing Data about Titanic passengers ,Then find solutions to predict People surviving this trip.
-
-# # <img src="https://www.sayidaty.net/sites/default/files/imce/user168721/5765341-238860317.jpg" alt="بعد 34 عاماً من اكتشاف حطام التايتنك.. إليكم القصة التي لم تروَ | مجلة سيدتي" class="n3VNCb" jsname="HiaYvf" jsaction="load:XAeZkd;" data-noaft="1" style="width: 834px; height: 500.995px; margin: 0px;">
-
-# ##    Prepar data for Analysis & Modelling
-
-# In[87]:
-
-
-# Importing libaraies
-
-import numpy as np  # linear algebra
-import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.express as px
+from sklearn.preprocessing import LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings("ignore")
 
 
-# In[88]:
+def load_data(train_path: str, test_path: str):
+    train = pd.read_csv(train_path)
+    test = pd.read_csv(test_path)
+    data = pd.concat([train, test], axis=0, sort=False).reset_index(drop=True)
+    return data, len(train)
 
 
-### Importing the datasets
-train = pd.read_csv('titanic_dataset/train.csv')
-test = pd.read_csv('titanic_dataset/test.csv')
+def clean_data(data: pd.DataFrame):
+    # Drop PassengerId and Cabin
+    data.drop(columns=['PassengerId', 'Cabin'], inplace=True, errors='ignore')
 
+    # Impute missing numeric with random sampling
+    num_features = data.select_dtypes(include=['number']).columns.tolist()
 
-# In[89]:
+    for feature in num_features:
+        if data[feature].isnull().any():
+            random_sample = data[feature].dropna().sample(data[feature].isnull().sum(), random_state=0)
+            random_sample.index = data[data[feature].isnull()].index
+            data.loc[data[feature].isnull(), feature] = random_sample
 
+    # Impute missing categorical with mode
+    cat_features = data.select_dtypes(include=['object']).columns.tolist()
 
-train.head()
+    for feature in cat_features:
+        mode_val = data[feature].mode()[0]
+        data[feature] = data[feature].fillna(mode_val)
 
+    return data
 
-# In[90]:
 
+def feature_engineering(data: pd.DataFrame):
+    # Create Family_members feature
+    data['Family_members'] = data['SibSp'] + data['Parch']
 
-test.head()
+    # Encode categorical columns
+    cat_features = data.select_dtypes(include=['object']).columns.tolist()
+    le = LabelEncoder()
+    for feature in cat_features:
+        data[feature] = le.fit_transform(data[feature])
 
+    # Drop unnecessary columns
+    data.drop(columns=['Name', 'Ticket'], axis=1, inplace=True, errors='ignore')
+    return data
 
-# In[91]:
 
+def plot_correlation(data: pd.DataFrame):
+    numeric_data = data.select_dtypes(include=['number']).drop(columns=['Survived'], errors='ignore')
+    correlation_matrix = numeric_data.corr()
 
-train.tail()
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(correlation_matrix, annot=True, cmap="Reds")
+    plt.title("Correlation Heatmap (Numeric Columns Only)")
+    plt.show()
 
+    correlation_with_survival = data.select_dtypes(include=['number']).corr()['Survived']
+    print("\nCorrelation with 'Survived':\n", correlation_with_survival.abs().sort_values(ascending=False)[1:])
 
-# In[92]:
 
+def train_models(train_data: pd.DataFrame, target: pd.Series):
+    models = {
+        "Logistic Regression": LogisticRegression(),
+        "K-Nearest Neighbors": KNeighborsClassifier(n_neighbors=10),
+        "Random Forest": RandomForestClassifier()
+    }
 
-test.tail()
+    for name, model in models.items():
+        model.fit(train_data, target)
+        preds = model.predict(train_data)
+        acc = accuracy_score(target, preds)
+        print(f"{name} Accuracy on Train Data: {acc:.4f}")
 
 
-# In[93]:
+def main():
+    # 1. Load Data
+    data, train_len = load_data("titanic_dataset/train.csv", "titanic_dataset/test.csv")
 
+    # 2. Clean Data
+    data = clean_data(data)
 
-print(train.shape)
-print('-'*50)
-print(test.shape)
+    # 3. Feature Engineering
+    data = feature_engineering(data)
 
+    # 4. Correlation
+    plot_correlation(data)
 
-# - DataFrame.describe() method generates descriptive statistics that summarize the central tendency, dispersion and shape of a dataset’s distribution, excluding NaN values. This method tells us a lot of things about a dataset. 
-# 
-# - One important thing is that the describe() method deals only with numeric values. It doesn't work with any categorical values. So if there are any categorical values in a column the describe() method will ignore it and display summary for the other columns unless parameter include="all" is passed.
-# 
-# - Now, let's understand the statistics that are generated by the describe() method:
-# count tells us the number of NoN-empty rows in a feature.
-# mean tells us the mean value of that feature.
-# std tells us the Standard Deviation Value of that feature.
-# min tells us the minimum value of that feature.
-# 25%, 50%, and 75% are the percentile/quartile of each features. This quartile information helps us to detect Outliers.
-# max tells us the maximum value of that feature.
+    # 5. Split Train/Test
+    train_data = data.iloc[:train_len]
+    test_data = data.iloc[train_len:].drop(columns=['Survived'], errors='ignore')
+    target = train_data.pop('Survived')
 
-# In[94]:
+    # 6. Train Models
+    train_models(train_data, target)
 
 
-print('train.describe' ,train.describe()) 
-print('-'*80)
-print('test.describe' ,test.describe()) 
-
-
-# ##   cleaning data
-
-# In[95]:
-
-
-print(train.dtypes)
-print('-'*80)
-print(test.dtypes)
-
-
-# In[96]:
-
-
-data = pd.concat([train, test],axis=0,sort=False)
-
-
-# In[97]:
-
-
-data.shape
-
-
-# In[98]:
-
-
-data.info()
-
-
-# #### Let's drop the PassengerId column. PassengerId column is seems to be an unique identifier for each row so we are dropping that it won't help us to find any insights from the data
-
-# In[99]:
-
-
-data.drop(["PassengerId"],axis=1,inplace=True) 
-
-
-# ##   Cleaning missing values 
-
-# In[100]:
-
-
-print(data.isna().sum().sort_values(ascending=False))
-
-
-# #### I will drop Cabin column because it has above 70% of missing values 
-
-# In[101]:
-
-
-data.drop(["Cabin"],axis=1,inplace=True) 
-
-
-# ### Extract Numerical & Categorical Features
-
-# In[102]:
-
-
-num_features=[col for col in data.columns if data[col].dtype!='O']
-num_features
-
-
-# In[103]:
-
-
-cat_features=[col for col in data.columns if data[col].dtype=='O']
-cat_features
-
-
-#  ### I Clean missing values using Random Value Imputation Because missing values is high in most features and This the best way to To maintain distrbuation For each feature.
-
-# In[104]:
-
-
-### creating a function so that I can easily do it for all features
-def Random_value_imputation(feature):
-    random_sample=data[feature].dropna().sample(data[feature].isnull().sum())               
-    random_sample.index=data[data[feature].isnull()].index
-    data.loc[data[feature].isnull(),feature]=random_sample
-
-
-# In[105]:
-
-
-for col in num_features:
-    Random_value_imputation(col)
-
-
-# In[106]:
-
-
-data[num_features].isnull().sum()
-
-
-# In[107]:
-
-
-data[cat_features].isnull().sum()
-
-
-# ### As rest of the features has less missing values,so I can fill it using mode concept(categorical data)
-
-# In[108]:
-
-
-def impute_mode(feature):
-    mode=data[feature].mode()[0]
-    data[feature]=data[feature].fillna(mode)
-
-
-# In[109]:
-
-
-for col in cat_features:
-    impute_mode(col)
-
-
-# In[110]:
-
-
-data[cat_features].isnull().sum()
-
-
-# ### Total unique categories in our categorical features to check if any dirtiness in data or not
-
-# In[111]:
-
-
-for col in cat_features:
-    print('{} has {} values '.format(col,train[col].unique()))
-    print('\n')
-
-
-# #### so Total unique categories doesnot have any dirtiness
-
-# ### Outlier
-
-# In[112]:
-
-
-plt.figure(figsize=(25,10))
-for i,col in enumerate(num_features):
-    plt.subplot(2,4,i+1)
-    sns.boxplot(data[col])
-
-
-# ### Almost we don't have Outlier in our num_features
-
-# ##  Analysing Distributions of data
-
-# In[113]:
-
-
-plt.figure(figsize=(40,40))
-for i,feature in enumerate(num_features):
-    plt.subplot(5,3,i+1)
-    data[feature].hist()
-    plt.title(feature)
-
-
-# ### Observations:
-#     1.age looks a bit left skewed
-#     2.Fare is left skewed
-#     3.SibSp is also left skewed
-#     4.Parch is also left skewed
-
-# ##  Exploring our data
-
-# In[114]:
-
-
-data["Survived"].value_counts() * 100 / len(data) 
-
-
-# In[115]:
-
-
-data["Survived"].value_counts().plot.pie(autopct = "%1.1f%%")
-
-
-# #### Survived-->> 61.2%
-# #### Unsurvived-->> 38.8%
-
-# In[116]:
-
-
-data["Sex"].value_counts().plot.pie(autopct = "%1.1f%%")
-
-
-# In[117]:
-
-
-plt.figure(figsize=(8,8))
-sns.barplot(x='Survived',y='Pclass',data=data,palette='Set1')
-plt.xticks([0,1],['Survived','Unsurvived'])
-plt.ylim(0,3)
-plt.xlabel('Survived or not')
-plt.ylabel('Pclass')
-plt.title("Pclass")
-ax=plt.gca()
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-
-# In[118]:
-
-
-plt.figure(figsize=(8,8))
-sns.barplot(x='Survived',y='Age',data=data,palette='Set1')
-plt.xticks([0,1],['Survived','Unsurvived'])
-plt.ylim(0,40)
-plt.xlabel('Survived or not')
-plt.ylabel('Age')
-plt.title("Age")
-ax=plt.gca()
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-
-# In[119]:
-
-
-plt.figure(figsize=(8,8))
-sns.barplot(x='Survived',y='SibSp',data=data,palette='Set1')
-plt.xticks([0,1],['Survived','Unsurvived'])
-plt.ylim(0,1)
-plt.xlabel('Survived or not')
-plt.ylabel('SibSp')
-plt.title("SibSp")
-ax=plt.gca()
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-
-# In[120]:
-
-
-plt.figure(figsize=(8,8))
-sns.barplot(x='Survived',y='Parch',data=data,palette='Set1')
-plt.xticks([0,1],['Survived','Unsurvived'])
-plt.ylim(0,0.5)
-plt.xlabel('Survived or not')
-plt.ylabel('Parch')
-plt.title("Parch")
-ax=plt.gca()
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-
-# In[121]:
-
-
-plt.figure(figsize=(8,8))
-sns.barplot(x='Survived',y='Fare',data=data,palette='Set1')
-plt.xticks([0,1],['Survived','Unsurvived'])
-plt.ylim(0,50)
-plt.xlabel('Survived or not')
-plt.ylabel('Fare')
-plt.title("Fare")
-ax=plt.gca()
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-
-# In[122]:
-
-
-### Defining violin and scatter plot & kde_plot functions
-
-def violin(col):
-    fig = px.violin(data, y=col, x="Survived", color="Survived", box=True)
-    return fig.show()
-
-def scatters(col1,col2):
-    fig = px.scatter(data, x=col1, y=col2, color="Survived")
-    return fig.show()
-data = data.reset_index(drop=True)
-def kde_plot(feature):
-    grid = sns.FacetGrid(data, hue="Survived",aspect=2)
-    grid.map(sns.kdeplot, feature)
-    grid.add_legend()
-
-
-# In[123]:
-
-
-kde_plot('Fare')
-
-
-# In[124]:
-
-
-kde_plot('Pclass')
-
-
-# In[125]:
-
-
-kde_plot('SibSp')
-
-
-# In[126]:
-
-
-kde_plot('Age')
-
-
-# In[127]:
-
-
-kde_plot('Parch')
-
-
-# In[128]:
-
-
-violin('Age')
-
-
-# In[129]:
-
-
-violin('Parch')
-
-
-# In[130]:
-
-
-violin('Fare')
-
-
-# In[131]:
-
-
-scatters('Age','Fare')
-
-
-# ##  checking co-relation in our data
-
-# In[132]:
-
-
-m=data.loc[:,data.columns!='Survived'].corr()
-plt.figure(figsize=(15,10))
-sns.heatmap(m,annot=True,cmap="Reds")
-
-
-# In[133]:
-
-# ✅ Filter only numeric columns (excluding 'Survived')
-numeric_data = data.select_dtypes(include=['number']).drop(columns=['Survived'], errors='ignore')
-
-# Compute correlation on numeric columns only
-m = numeric_data.corr()
-# Plot heatmap
-plt.figure(figsize=(15, 10))
-sns.heatmap(m, annot=True, cmap="Reds")
-plt.title("Correlation Matrix (Numeric Columns Only)")
-plt.show()
-
-# ✅ If you want correlation with 'Survived', you must include it in the numeric data
-numeric_data_with_survived = data.select_dtypes(include=['number'])
-
-# Calculate correlation of all numeric columns with 'Survived'
-correlation = numeric_data_with_survived.corr()["Survived"]
-
-print(correlation)
-
-
-# In[134]:
-
-
-corelation.abs().sort_values(ascending=False)[1:]
-
-
-# In[135]:
-
-
-data.head()
-
-
-# In[136]:
-
-
-## we can have the total family members as a feature
-data['Family_members'] = data['SibSp'] + data['Parch']
-
-
-# In[137]:
-
-
-data.head()
-
-
-# In[138]:
-
-
-data.drop(columns=['Name','Ticket'],axis=1,inplace=True)
-
-
-# In[139]:
-
-
-data.head()
-
-
-# ##  Applying feature Encoding on our data
-
-# #### As we have just 2 categories in Sex feature and 3 categories in Embarked then we can consider Label Encoder as it will not cause Curse of Dimensionality
-
-# In[140]:
-
-
-cat_features=[col for col in data.columns if data[col].dtype=='O']
-cat_features
-
-
-# In[141]:
-
-
-from sklearn.preprocessing import LabelEncoder
-
-
-# In[142]:
-
-
-le = LabelEncoder()
-
-
-# In[143]:
-
-
-for col in cat_features:
-    data[col]=le.fit_transform(data[col])
-
-
-# In[144]:
-
-
-data.head()
-
-
-# In[145]:
-
-
-data.info()
-
-
-# In[146]:
-
-
-# Seperating test and train sets
-
-test_data = data.iloc[891:]
-
-
-# In[147]:
-
-
-test_data.drop('Survived',axis=1,inplace=True)
-
-
-# In[148]:
-
-
-train_data = data.iloc[:891]
-
-
-# In[149]:
-
-
-train_data= data.iloc[:891]
-
-
-# In[150]:
-
-
-train_data.head()
-
-
-# In[151]:
-
-
-target_class = 'Survived'
-target = train_data.pop(target_class)
-
-
-# In[152]:
-
-
-train_data
-
-
-# In[153]:
-
-
-## importing libaraies for machine learning
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score
-
-
-# In[154]:
-
-
-### Applying LogisticRegression Model 
-LogisticRegressionModel = LogisticRegression()
-
-
-# In[155]:
-
-
-LogisticRegressionModel.fit(train_data,target)
-
-
-# In[156]:
-
-
-print(accuracy_score(target, LogisticRegressionModel.predict(train_data) ))
-
-
-# In[157]:
-
-
-### Applying KNeighborsClassifier Model 
-KNeighborsModeL= KNeighborsClassifier(n_neighbors=10)
-
-
-# In[158]:
-
-
-KNeighborsModeL.fit(train_data,target)
-
-
-# In[159]:
-
-
-print(accuracy_score(target, KNeighborsModeL.predict(train_data) ))
-
-
-# In[160]:
-
-
-### Applying RandomForestClassifier Model 
-RandomForestModeL= RandomForestClassifier()
-
-
-# In[161]:
-
-
-RandomForestModeL.fit(train_data,target)
-
-
-# In[162]:
-
-
-print(accuracy_score(target, RandomForestModeL.predict(train_data) ))
-
-
-# If you found this notebook helpful or you just liked it , some upvotes would be very much appreciated - That will keep me motivated to update it on a regular basis
+if __name__ == "__main__":
+    main()
