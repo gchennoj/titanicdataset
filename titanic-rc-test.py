@@ -65,18 +65,24 @@ def main():
         target = test_data.pop('Survived')
         predictions = model.predict(test_data)
         accuracy = accuracy_score(target, predictions)
-        print(f"Test Accuracy: {accuracy:.4f}")
+        print(f"\n==== Evaluation Metrics ====")
+        print(f"Accuracy: {accuracy:.4f}")
 
         metrics = {"accuracy": accuracy}
         with open(os.path.join(artifacts_dir, 'metrics.json'), 'w') as f:
             json.dump(metrics, f)
-        print(f"Metrics saved to {artifacts_dir}/metrics.json")
+
+        print(f"\nMetrics saved to {artifacts_dir}/metrics.json")
     else:
         predictions = model.predict(test_data)
         test_data['Predicted_Survived'] = predictions
         output_file = os.path.join(artifacts_dir, 'predictions.csv')
         test_data.to_csv(output_file, index=False)
-        print(f"Predictions saved to {output_file}")
+
+        print(f"\n==== Predictions ====")
+        print(test_data[['Predicted_Survived']].head(10))  # Show first 10 for sanity check
+
+        print(f"\nPredictions saved to {output_file}")
 
 
 if __name__ == "__main__":
