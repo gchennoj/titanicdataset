@@ -55,27 +55,28 @@ def main():
         sys.exit(1)
 
     model_file = sys.argv[1]
-
-    # Load the model artifact dynamically based on extension
     model = load_model_artifact(model_file)
 
-    # Load test data
     test_data = load_test_data("titanic_dataset/test.csv")
-    if 'Survived' not in test_data.columns:
-        raise ValueError("Test dataset must contain 'Survived' column for evaluation.")
+    artifacts_dir = '/tmp/artifacts'
+    os.makedirs(artifacts_dir, exist_ok=True)
 
-    target = test_data.pop('Survived')
+    if 'Survived' in test_data.columns:
+        target = test_data.pop('Survived')
+        predictions = model.predict(test_data)
+        accuracy = accuracy_score(target, predictions)
+        print(f"Test Accuracy: {accuracy:.4f}")
 
-    # Evaluate model
-    predictions = model.predict(test_data)
-    accuracy = accuracy_score(target, predictions)
-    print(f"Test Accuracy: {accuracy:.4f}")
-
-    # Save metrics
-    os.makedirs('/tmp/artifacts', exist_ok=True)
-    metrics = {"accuracy": accuracy}
-    with open('/tmp/artifacts/metrics.json', 'w') as f:
-        json.dump(metrics, f)
+        metrics = {"accuracy": accuracy}
+        with open(os.path.join(artifacts_dir, 'metrics.json'), 'w') as f:
+            json.dump(metrics, f)
+        print(f"Metrics saved to {artifacts_dir}/metrics.json")
+    else:
+        predictions = model.predict(test_data)
+        test_data['Predicted_Survived'] = predictions
+        output_file = os.path.join(artifacts_dir, 'predictions.csv')
+        test_data.to_csv(output_file, index=False)
+        print(f"Predictions saved to {output_file}")
 
 
 if __name__ == "__main__":
